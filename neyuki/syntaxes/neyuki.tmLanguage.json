@@ -16,11 +16,11 @@
       "patterns": [
         {
           "name": "comment.line.double-dash.neyuki",
-          "match": "--.*$"
+          "match": "(?:^|\\s)--.*$"
         },
         {
           "name": "comment.block.neyuki",
-          "begin": "--\\[\\[",
+          "begin": "(?:^|\\s)--\\[\\[",
           "end": "\\]\\]",
           "patterns": [
             { "include": "#comments" }
