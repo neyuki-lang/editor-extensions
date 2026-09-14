@@ -1,21 +1,33 @@
 {
   "name": "neyuki",
   "displayName": "Neyuki",
-  "description": "Syntax highlighting and editor support for the Neyuki language.",
-  "version": "0.1.0",
+  "description": "Syntax highlighting, IntelliSense, and language server support for the Neyuki language.",
+  "version": "0.2.0",
   "publisher": "neyuki",
+  "main": "./extension.js",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.90.0"
   },
+  "activationEvents": [
+    "onLanguage:neyuki"
+  ],
+  "scripts": {
+    "build": "node -e \"console.log('Neyuki extension build complete')\"",
+    "vscode:prepublish": "npm run build",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Other"
   ],
   "keywords": [
     "neyuki",
     "language",
     "syntax",
-    "nyk"
+    "nyk",
+    "intellisense",
+    "language-server"
   ],
   "repository": {
     "type": "git",
