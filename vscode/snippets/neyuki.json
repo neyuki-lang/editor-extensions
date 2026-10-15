@@ -1,0 +1,121 @@
+{
+  "local function": {
+    "prefix": "lfn",
+    "body": ["local function ${1:name}(${2})", "\t$0", "end"],
+    "description": "A local function"
+  },
+  "function": {
+    "prefix": "fn",
+    "body": ["function ${1:name}(${2})", "\t$0", "end"],
+    "description": "A function"
+  },
+  "method": {
+    "prefix": "method",
+    "body": ["function ${1:Class}:${2:name}(${3})", "\t$0", "end"],
+    "description": "A method with an implicit self"
+  },
+  "anonymous function": {
+    "prefix": "afn",
+    "body": ["function(${1})", "\t$0", "end"],
+    "description": "An anonymous function"
+  },
+  "if": {
+    "prefix": "if",
+    "body": ["if ${1:condition} then", "\t$0", "end"],
+    "description": "if ... then ... end"
+  },
+  "if else": {
+    "prefix": "ife",
+    "body": ["if ${1:condition} then", "\t$2", "else", "\t$0", "end"],
+    "description": "if ... then ... else ... end"
+  },
+  "elseif": {
+    "prefix": "elseif",
+    "body": ["elseif ${1:condition} then", "\t$0"],
+    "description": "Another branch of an if"
+  },
+  "numeric for": {
+    "prefix": "fori",
+    "body": ["for ${1:i} = ${2:1}, ${3:10} do", "\t$0", "end"],
+    "description": "Count from one number to another"
+  },
+  "for in": {
+    "prefix": "for",
+    "body": ["for ${1:key}, ${2:value} in ${3:t} do", "\t$0", "end"],
+    "description": "Iterate over a table or iterator"
+  },
+  "while": {
+    "prefix": "while",
+    "body": ["while ${1:condition} do", "\t$0", "end"],
+    "description": "while ... do ... end"
+  },
+  "repeat": {
+    "prefix": "repeat",
+    "body": ["repeat", "\t$0", "until ${1:condition}"],
+    "description": "repeat ... until"
+  },
+  "require": {
+    "prefix": "req",
+    "body": ["local ${1:fs} = require(\"@neyuki/${1}\")"],
+    "description": "Load a bundled module"
+  },
+  "try": {
+    "prefix": "try",
+    "body": ["local ok, ${1:result} = try(${2:fn}${3})", "if not ok then", "\t$0", "end"],
+    "description": "Call a function and handle its error"
+  },
+  "class": {
+    "prefix": "class",
+    "body": [
+      "local ${1:Class} = {}",
+      "${1}.__index = ${1}",
+      "",
+      "function ${1}.new(${2})",
+      "\tlocal self = setmetatable({}, ${1})",
+      "\t$0",
+      "\treturn self",
+      "end"
+    ],
+    "description": "A table with a constructor and methods"
+  },
+  "module": {
+    "prefix": "module",
+    "body": ["local ${1:M} = {}", "", "$0", "", "return ${1}"],
+    "description": "A module returning a table"
+  },
+  "ui window": {
+    "prefix": "uiwindow",
+    "body": [
+      "local ui = require(\"@neyuki/ui\")",
+      "local win = ui.open({ title = \"${1:Neyuki}\", width = ${2:800}, height = ${3:600} })",
+      "",
+      "ui.run(function(events, dt)",
+      "\tfor _, event in events do",
+      "\t\tif event.kind == \"keydown\" and event.key == \"escape\" then win:close() end",
+      "\tend",
+      "\twin:clear(\"#202030\")",
+      "\t$0",
+      "\twin:present()",
+      "end)"
+    ],
+    "description": "A window with a draw loop"
+  },
+  "http server": {
+    "prefix": "httpserve",
+    "body": [
+      "local http = require(\"@neyuki/http\")",
+      "",
+      "http.serve(${1:8080}, function(request)",
+      "\tif request.path == \"/\" then return \"${2:hello}\" end",
+      "\t$0",
+      "\treturn { status = 404, body = \"not found\" }",
+      "end)"
+    ],
+    "description": "An HTTP server"
+  },
+  "region": {
+    "prefix": "region",
+    "body": ["-- #region ${1:name}", "$0", "-- #endregion"],
+    "description": "A foldable region"
+  }
+}

@@ -1,56 +1,54 @@
 {
   "name": "neyuki",
   "displayName": "Neyuki",
-  "description": "Syntax highlighting, IntelliSense, and language server support for the Neyuki language.",
+  "description": "Highlighting, completion with documentation, live diagnostics, running and debugging for the Neyuki language.",
   "version": "0.2.0",
   "publisher": "neyuki",
-  "main": "./extension.js",
+  "license": "MIT",
+  "main": "./src/extension.js",
   "icon": "icon.png",
   "engines": {
     "vscode": "^1.90.0"
   },
-  "activationEvents": [
-    "onLanguage:neyuki"
-  ],
-  "scripts": {
-    "test": "node --test test/*.test.js",
-    "package": "npx @vscode/vsce package --no-dependencies"
-  },
   "categories": [
     "Programming Languages",
-    "Other"
+    "Debuggers",
+    "Linters",
+    "Snippets"
   ],
   "keywords": [
     "neyuki",
-    "language",
-    "syntax",
     "nyk",
-    "intellisense",
-    "language-server"
+    "lua",
+    "scripting"
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/neyuki/neyuki-lang.git"
+    "url": "https://github.com/neyuki-lang/editor-extensions.git"
   },
+  "homepage": "https://neyuki.cc",
   "bugs": {
-    "url": "https://github.com/neyuki/neyuki-lang/issues"
+    "url": "https://github.com/neyuki-lang/editor-extensions/issues"
   },
-  "dependencies": {
-    "vscode-languageclient": "^9.0.0",
-    "vscode-languageserver": "^9.0.0",
-    "vscode-languageserver-textdocument": "^1.0.0"
+  "activationEvents": [
+    "onDebugResolve:neyuki",
+    "onDebugDynamicConfigurations:neyuki"
+  ],
+  "scripts": {
+    "api": "node scripts/build-api.js",
+    "test": "node --test test/*.test.js",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
   },
   "contributes": {
     "languages": [
       {
         "id": "neyuki",
-        "aliases": [
-          "Neyuki",
-          "neyuki"
-        ],
-        "extensions": [
-          ".nyk"
-        ],
+        "aliases": ["Neyuki", "neyuki"],
+        "extensions": [".nyk"],
         "configuration": "./language-configuration.json",
         "icon": {
           "light": "./file-icon.svg",
@@ -62,12 +60,168 @@
       {
         "language": "neyuki",
         "scopeName": "source.neyuki",
-        "path": "./syntaxes/neyuki.tmLanguage.json"
+        "path": "./syntaxes/neyuki.tmLanguage.json",
+        "embeddedLanguages": {
+          "meta.embedded.expression.neyuki": "neyuki"
+        }
+      }
+    ],
+    "snippets": [
+      {
+        "language": "neyuki",
+        "path": "./snippets/neyuki.json"
+      }
+    ],
+    "configuration": {
+      "title": "Neyuki",
+      "properties": {
+        "neyuki.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to the `neyuki` executable. Leave empty to use `neyuki` from the `PATH`."
+        },
+        "neyuki.lint.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show errors and warnings from `neyuki lint`."
+        },
+        "neyuki.lint.onType": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check files while typing, not only when they are opened and saved."
+        },
+        "neyuki.lint.delay": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "description": "Milliseconds to wait after typing stops before checking."
+        },
+        "neyuki.completion.insertParentheses": {
+          "type": "boolean",
+          "default": true,
+          "description": "Add parentheses when completing a function and show its parameters."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "neyuki.runFile",
+        "title": "Run File",
+        "category": "Neyuki",
+        "icon": "$(play)"
+      },
+      {
+        "command": "neyuki.debugFile",
+        "title": "Debug File",
+        "category": "Neyuki",
+        "icon": "$(debug-alt)"
+      }
+    ],
+    "menus": {
+      "editor/title/run": [
+        {
+          "command": "neyuki.runFile",
+          "when": "resourceLangId == neyuki",
+          "group": "navigation@0"
+        },
+        {
+          "command": "neyuki.debugFile",
+          "when": "resourceLangId == neyuki",
+          "group": "navigation@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "neyuki.runFile",
+          "when": "resourceLangId == neyuki",
+          "group": "navigation@9"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "neyuki.runFile",
+          "when": "editorLangId == neyuki"
+        },
+        {
+          "command": "neyuki.debugFile",
+          "when": "editorLangId == neyuki"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "neyuki.runFile",
+        "key": "ctrl+f5",
+        "mac": "cmd+f5",
+        "when": "editorLangId == neyuki && !inDebugMode"
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "neyuki"
+      }
+    ],
+    "debuggers": [
+      {
+        "type": "neyuki",
+        "label": "Neyuki",
+        "languages": ["neyuki"],
+        "configurationAttributes": {
+          "launch": {
+            "required": ["program"],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "The Neyuki file to run.",
+                "default": "${file}"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Pause on the first line.",
+                "default": false
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Directory to run in. Defaults to the workspace folder.",
+                "default": "${workspaceFolder}"
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "neyuki",
+            "request": "launch",
+            "name": "Debug current file",
+            "program": "${file}"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "Neyuki: Debug a file",
+            "description": "Run a Neyuki script under the debugger",
+            "body": {
+              "type": "neyuki",
+              "request": "launch",
+              "name": "Debug ${1:file}",
+              "program": "^\"\\${workspaceFolder}/${1:main.nyk}\""
+            }
+          }
+        ]
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "neyuki",
+        "required": ["file"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "The Neyuki file to run."
+          }
+        }
       }
     ]
-  },
-  "devDependencies": {
-    "vscode-oniguruma": "2.0.1",
-    "vscode-textmate": "9.3.2"
   }
 }
