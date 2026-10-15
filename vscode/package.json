@@ -13,8 +13,7 @@
     "onLanguage:neyuki"
   ],
   "scripts": {
-    "build": "node -e \"console.log('Neyuki extension build complete')\"",
-    "vscode:prepublish": "npm run build",
+    "test": "node --test test/*.test.js",
     "package": "npx @vscode/vsce package --no-dependencies"
   },
   "categories": [
@@ -42,20 +41,33 @@
     "vscode-languageserver-textdocument": "^1.0.0"
   },
   "contributes": {
-    "languages": [{
-      "id": "neyuki",
-      "aliases": ["Neyuki", "neyuki"],
-      "extensions": [".nyk"],
-      "configuration": "./language-configuration.json",
-      "icon": {
-        "light": "./file-icon.svg",
-        "dark": "./file-icon.svg"
+    "languages": [
+      {
+        "id": "neyuki",
+        "aliases": [
+          "Neyuki",
+          "neyuki"
+        ],
+        "extensions": [
+          ".nyk"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./file-icon.svg",
+          "dark": "./file-icon.svg"
+        }
       }
-    }],
-    "grammars": [{
-      "language": "neyuki",
-      "scopeName": "source.neyuki",
-      "path": "./syntaxes/neyuki.tmLanguage.json"
-    }]
+    ],
+    "grammars": [
+      {
+        "language": "neyuki",
+        "scopeName": "source.neyuki",
+        "path": "./syntaxes/neyuki.tmLanguage.json"
+      }
+    ]
+  },
+  "devDependencies": {
+    "vscode-oniguruma": "2.0.1",
+    "vscode-textmate": "9.3.2"
   }
 }

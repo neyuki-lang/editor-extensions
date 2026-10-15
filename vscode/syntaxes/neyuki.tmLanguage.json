@@ -3,113 +3,269 @@
   "name": "Neyuki",
   "scopeName": "source.neyuki",
   "fileTypes": ["nyk"],
-  "patterns": [
-    { "include": "#comments" },
-    { "include": "#strings" },
-    { "include": "#numbers" },
-    { "include": "#keywords" },
-    { "include": "#builtins" },
-    { "include": "#operators" }
-  ],
+  "patterns": [{ "include": "#statements" }],
   "repository": {
+    "statements": {
+      "patterns": [
+        { "include": "#comments" },
+        { "include": "#function-definition" },
+        { "include": "#declaration" },
+        { "include": "#strings" },
+        { "include": "#numbers" },
+        { "include": "#keywords" },
+        { "include": "#constants" },
+        { "include": "#type-annotation" },
+        { "include": "#library" },
+        { "include": "#builtins" },
+        { "include": "#calls" },
+        { "include": "#properties" },
+        { "include": "#operators" },
+        { "include": "#punctuation" },
+        { "include": "#table-braces" }
+      ]
+    },
+
     "comments": {
       "patterns": [
         {
-          "name": "comment.line.double-dash.neyuki",
-          "match": "(?:^|\\s)--.*$"
+          "name": "comment.block.neyuki",
+          "begin": "(?<![\\w)\\]])--\\[(=*)\\[",
+          "beginCaptures": { "0": { "name": "punctuation.definition.comment.begin.neyuki" } },
+          "end": "\\]\\1\\]",
+          "endCaptures": { "0": { "name": "punctuation.definition.comment.end.neyuki" } }
         },
         {
-          "name": "comment.block.neyuki",
-          "begin": "(?:^|\\s)--\\[\\[",
-          "end": "\\]\\]",
-          "patterns": [
-            { "include": "#comments" }
-          ]
+          "name": "comment.line.double-dash.neyuki",
+          "begin": "(?<![\\w)\\]])--",
+          "beginCaptures": { "0": { "name": "punctuation.definition.comment.neyuki" } },
+          "end": "$"
         }
       ]
     },
+
+    "function-definition": {
+      "patterns": [
+        {
+          "begin": "\\b(?:(local|const|global)\\s+)?(function)\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\s*\\.\\s*)*)(?:([A-Za-z_][A-Za-z0-9_]*)\\s*(:)\\s*)?([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "beginCaptures": {
+            "1": { "name": "storage.modifier.neyuki" },
+            "2": { "name": "storage.type.function.neyuki" },
+            "3": { "name": "entity.name.namespace.neyuki" },
+            "4": { "name": "entity.name.type.neyuki" },
+            "5": { "name": "punctuation.separator.method.neyuki" },
+            "6": { "name": "entity.name.function.neyuki" }
+          },
+          "end": "(?<=\\))",
+          "patterns": [{ "include": "#parameters" }]
+        },
+        {
+          "begin": "\\b(function)\\s*(?=\\()",
+          "beginCaptures": { "1": { "name": "storage.type.function.neyuki" } },
+          "end": "(?<=\\))",
+          "patterns": [{ "include": "#parameters" }]
+        }
+      ]
+    },
+
+    "parameters": {
+      "name": "meta.parameters.neyuki",
+      "begin": "\\(",
+      "beginCaptures": { "0": { "name": "punctuation.definition.parameters.begin.neyuki" } },
+      "end": "\\)",
+      "endCaptures": { "0": { "name": "punctuation.definition.parameters.end.neyuki" } },
+      "patterns": [
+        { "include": "#comments" },
+        { "name": "variable.language.self.neyuki", "match": "\\bself\\b" },
+        { "name": "variable.parameter.neyuki", "match": "[A-Za-z_][A-Za-z0-9_]*|\\.\\.\\." },
+        { "include": "#type-annotation" },
+        { "name": "punctuation.separator.parameter.neyuki", "match": "," }
+      ]
+    },
+
+    "declaration": {
+      "match": "\\b(local|const|global)\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\s*,\\s*)*[A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "storage.modifier.neyuki" },
+        "2": { "name": "variable.other.declaration.neyuki" }
+      }
+    },
+
+    "type-annotation": {
+      "comment": "`: Type` after a name, `...` or a parameter list. A colon followed by a name and a call is a method call instead.",
+      "begin": "(?<=[A-Za-z0-9_)\\]]|\\.\\.\\.)\\s*(:)(?!\\s*[A-Za-z_][A-Za-z0-9_]*\\s*[(\"'`{])(?=\\s*[A-Za-z_({\\[])",
+      "beginCaptures": { "1": { "name": "punctuation.separator.type.neyuki" } },
+      "end": "(?=[=,)\\n;]|\\s(?:then|do|end|local|return)\\b)|(?<=[A-Za-z0-9_?})\\]])(?=\\s+[A-Za-z_])",
+      "patterns": [{ "include": "#types" }]
+    },
+
+    "types": {
+      "patterns": [
+        { "name": "support.type.primitive.neyuki", "match": "\\b(?:any|nil|never|boolean|number|int|integer|float|string|table|function|buffer|thread)\\b" },
+        { "name": "entity.name.type.neyuki", "match": "[A-Za-z_][A-Za-z0-9_]*" },
+        { "name": "keyword.operator.type.neyuki", "match": "\\?|\\||->|\\.\\.\\." },
+        {
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": { "0": { "name": "punctuation.definition.type.table.neyuki" } },
+          "endCaptures": { "0": { "name": "punctuation.definition.type.table.neyuki" } },
+          "patterns": [{ "match": ":", "name": "punctuation.separator.type.neyuki" }, { "include": "#types" }]
+        },
+        { "begin": "\\(", "end": "\\)", "patterns": [{ "include": "#types" }] },
+        { "begin": "\\[", "end": "\\]", "patterns": [{ "include": "#types" }] },
+        { "name": "punctuation.separator.neyuki", "match": "," }
+      ]
+    },
+
     "strings": {
       "patterns": [
         {
           "name": "string.quoted.double.neyuki",
           "begin": "\"",
-          "end": "\"",
-          "patterns": [
-            {
-              "name": "constant.character.escape.neyuki",
-              "match": "\\\\."
-            }
-          ]
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.neyuki" } },
+          "end": "\"|(?<!\\\\)$",
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.neyuki" } },
+          "patterns": [{ "include": "#escapes" }]
         },
         {
           "name": "string.quoted.single.neyuki",
           "begin": "'",
-          "end": "'",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.neyuki" } },
+          "end": "'|(?<!\\\\)$",
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.neyuki" } },
+          "patterns": [{ "include": "#escapes" }]
+        },
+        {
+          "name": "string.quoted.other.multiline.neyuki",
+          "begin": "\\[(=*)\\[",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.neyuki" } },
+          "end": "\\]\\1\\]",
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.neyuki" } }
+        },
+        {
+          "name": "string.interpolated.neyuki",
+          "begin": "`",
+          "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.neyuki" } },
+          "end": "`",
+          "endCaptures": { "0": { "name": "punctuation.definition.string.end.neyuki" } },
           "patterns": [
+            { "include": "#escapes" },
             {
-              "name": "constant.character.escape.neyuki",
-              "match": "\\\\."
+              "name": "meta.embedded.expression.neyuki",
+              "contentName": "source.neyuki",
+              "begin": "\\{",
+              "beginCaptures": { "0": { "name": "punctuation.section.interpolation.begin.neyuki" } },
+              "end": "\\}",
+              "endCaptures": { "0": { "name": "punctuation.section.interpolation.end.neyuki" } },
+              "patterns": [{ "include": "#statements" }]
             }
           ]
-        },
-        {
-          "name": "string.quoted.multiline.neyuki",
-          "begin": "\\[\\[",
-          "end": "\\]\\]"
         }
       ]
     },
+
+    "escapes": {
+      "patterns": [
+        { "name": "constant.character.escape.neyuki", "match": "\\\\(?:[abfnrtvz\\\\\"'`{}]|\\d{1,3}|x[0-9A-Fa-f]{2}|u\\{[0-9A-Fa-f]+\\}|$)" },
+        { "name": "invalid.illegal.escape.neyuki", "match": "\\\\[xu]" }
+      ]
+    },
+
     "numbers": {
       "patterns": [
-        {
-          "name": "constant.numeric.bigint.neyuki",
-          "match": "\\b\\d[\\d_]*n\\b"
-        },
-        {
-          "name": "constant.numeric.hex.neyuki",
-          "match": "\\b0[xX][0-9A-Fa-f_]+\\b"
-        },
-        {
-          "name": "constant.numeric.binary.neyuki",
-          "match": "\\b0[bB][01_]+\\b"
-        },
-        {
-          "name": "constant.numeric.octal.neyuki",
-          "match": "\\b0[oO][0-7_]+\\b"
-        },
-        {
-          "name": "constant.numeric.float.neyuki",
-          "match": "(?:\\d[\\d_]*\\.\\d[\\d_]*|\\d[\\d_]*\\.?\\d[\\d_]*[eE][+-]?\\d[\\d_]*|\\.\\d[\\d_]*)(?:[fF])?"
-        },
-        {
-          "name": "constant.numeric.integer.neyuki",
-          "match": "\\b\\d[\\d_]*\\b"
-        }
+        { "name": "constant.numeric.hex.neyuki", "match": "\\b0[xX][0-9A-Fa-f_]+\\b" },
+        { "name": "constant.numeric.binary.neyuki", "match": "\\b0[bB][01_]+\\b" },
+        { "name": "constant.numeric.float.neyuki", "match": "\\b\\d[\\d_]*\\.\\d[\\d_]*(?:[eE][+-]?\\d+)?\\b|\\b\\d[\\d_]*[eE][+-]?\\d+\\b|(?<![\\w.])\\.\\d[\\d_]*(?:[eE][+-]?\\d+)?\\b" },
+        { "name": "constant.numeric.integer.neyuki", "match": "\\b\\d[\\d_]*\\b" }
       ]
     },
+
     "keywords": {
       "patterns": [
-        {
-          "name": "keyword.control.neyuki",
-          "match": "\\b(?:and|break|const|continue|do|else|elseif|end|false|for|function|global|if|in|local|nil|not|or|repeat|return|then|true|type|until|while)\\b"
-        }
+        { "name": "keyword.control.conditional.neyuki", "match": "\\b(?:if|then|elseif|else)\\b" },
+        { "name": "keyword.control.loop.neyuki", "match": "\\b(?:for|in|while|do|repeat|until|break|continue)\\b" },
+        { "name": "keyword.control.flow.neyuki", "match": "\\b(?:return|end)\\b" },
+        { "name": "keyword.operator.logical.neyuki", "match": "\\b(?:and|or|not)\\b" },
+        { "name": "storage.modifier.neyuki", "match": "\\b(?:local|const|global)\\b" },
+        { "name": "storage.type.function.neyuki", "match": "\\bfunction\\b" }
       ]
     },
+
+    "constants": {
+      "patterns": [
+        { "name": "constant.language.boolean.neyuki", "match": "\\b(?:true|false)\\b" },
+        { "name": "constant.language.nil.neyuki", "match": "\\bnil\\b" },
+        { "name": "variable.language.self.neyuki", "match": "\\bself\\b" },
+        { "name": "variable.language.neyuki", "match": "\\b(?:_G|_VERSION)\\b" },
+        { "name": "variable.parameter.vararg.neyuki", "match": "\\.\\.\\.(?!\\.)" }
+      ]
+    },
+
+    "library": {
+      "match": "(?<![.:])\\b(math|string|table|bit|buffer|coroutine|utf8|debug|json|os)\\s*(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "support.class.library.neyuki" },
+        "2": { "name": "punctuation.accessor.neyuki" },
+        "3": { "name": "support.function.library.neyuki" }
+      }
+    },
+
     "builtins": {
+      "name": "support.function.builtin.neyuki",
+      "match": "(?<![.:])\\b(?:assert|collectgarbage|error|float|getmetatable|int|ipairs|next|pairs|pcall|print|rawequal|rawget|rawlen|rawset|require|select|setmetatable|tonumber|tostring|try|type|typeof|warn|xpcall)\\b(?=\\s*\\()"
+    },
+
+    "calls": {
       "patterns": [
         {
-          "name": "support.function.builtin.neyuki",
-          "match": "\\b(?:assert|bigint|float|int|print|require|tostring|tonumber|try|typeof|type)\\b"
+          "match": "(:)\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": {
+            "1": { "name": "punctuation.separator.method.neyuki" },
+            "2": { "name": "entity.name.function.method.neyuki" }
+          }
+        },
+        {
+          "match": "\\b([A-Za-z_][A-Za-z0-9_]*)\\s*(?=\\()",
+          "captures": { "1": { "name": "entity.name.function.call.neyuki" } }
         }
       ]
     },
+
+    "properties": {
+      "match": "(\\.)(?!\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": { "name": "punctuation.accessor.neyuki" },
+        "2": { "name": "variable.other.property.neyuki" }
+      }
+    },
+
     "operators": {
       "patterns": [
-        {
-          "name": "keyword.operator.neyuki",
-          "match": "[=\\+\\-\\*/%<>!~^|:&]+|::"
-        }
+        { "name": "keyword.operator.assignment.compound.neyuki", "match": "(?:\\+|-|\\*|//|/|%|\\^|\\.\\.|<<|>>|&|\\||\\?\\?)=" },
+        { "name": "keyword.operator.comparison.neyuki", "match": "==|!=|<=|>=|<(?!<)|(?<!>)>(?!>)" },
+        { "name": "keyword.operator.coalesce.neyuki", "match": "\\?\\?" },
+        { "name": "keyword.operator.increment.neyuki", "match": "\\+\\+|--" },
+        { "name": "keyword.operator.concatenation.neyuki", "match": "\\.\\.(?!\\.)" },
+        { "name": "keyword.operator.bitwise.neyuki", "match": "<<<|>>>|<<|>>|&|\\||~" },
+        { "name": "keyword.operator.arithmetic.neyuki", "match": "//|[+\\-*/%^]" },
+        { "name": "keyword.operator.length.neyuki", "match": "#" },
+        { "name": "keyword.operator.assignment.neyuki", "match": "=" }
       ]
+    },
+
+    "punctuation": {
+      "patterns": [
+        { "name": "punctuation.separator.comma.neyuki", "match": "," },
+        { "name": "punctuation.terminator.statement.neyuki", "match": ";" },
+        { "name": "punctuation.separator.method.neyuki", "match": ":" }
+      ]
+    },
+
+    "table-braces": {
+      "begin": "\\{",
+      "beginCaptures": { "0": { "name": "punctuation.section.table.begin.neyuki" } },
+      "end": "\\}",
+      "endCaptures": { "0": { "name": "punctuation.section.table.end.neyuki" } },
+      "patterns": [{ "include": "#statements" }]
     }
   }
 }
