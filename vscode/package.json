@@ -1,8 +1,8 @@
 {
   "name": "neyuki",
   "displayName": "Neyuki",
-  "description": "Highlighting, completion with documentation, live diagnostics, running and debugging for the Neyuki language.",
-  "version": "0.2.0",
+  "description": "Highlighting, completion, hover, diagnostics, navigation, rename, formatting, running and debugging for the Neyuki language, powered by the language server in the neyuki executable.",
+  "version": "0.3.0",
   "publisher": "neyuki",
   "license": "MIT",
   "main": "./src/extension.js",
@@ -14,6 +14,7 @@
     "Programming Languages",
     "Debuggers",
     "Linters",
+    "Formatters",
     "Snippets"
   ],
   "keywords": [
@@ -35,9 +36,11 @@
     "onDebugDynamicConfigurations:neyuki"
   ],
   "scripts": {
-    "api": "node scripts/build-api.js",
     "test": "node --test test/*.test.js",
-    "package": "npx @vscode/vsce package --no-dependencies"
+    "package": "npx @vscode/vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
   },
   "devDependencies": {
     "vscode-oniguruma": "2.0.1",
@@ -84,27 +87,31 @@
         "neyuki.lint.enable": {
           "type": "boolean",
           "default": true,
-          "description": "Show errors and warnings from `neyuki lint`."
-        },
-        "neyuki.lint.onType": {
-          "type": "boolean",
-          "default": true,
-          "description": "Check files while typing, not only when they are opened and saved."
-        },
-        "neyuki.lint.delay": {
-          "type": "number",
-          "default": 300,
-          "minimum": 0,
-          "description": "Milliseconds to wait after typing stops before checking."
+          "markdownDescription": "Show the errors and warnings the Neyuki language server reports. The server decides when to check. Changing this restarts the server."
         },
         "neyuki.completion.insertParentheses": {
           "type": "boolean",
           "default": true,
-          "description": "Add parentheses when completing a function and show its parameters."
+          "description": "Add parentheses when completing a function."
         }
       }
     },
     "commands": [
+      {
+        "command": "neyuki.restartServer",
+        "title": "Restart Language Server",
+        "category": "Neyuki"
+      },
+      {
+        "command": "neyuki.stopServer",
+        "title": "Stop Language Server",
+        "category": "Neyuki"
+      },
+      {
+        "command": "neyuki.showServerOutput",
+        "title": "Show Language Server Output",
+        "category": "Neyuki"
+      },
       {
         "command": "neyuki.runFile",
         "title": "Run File",

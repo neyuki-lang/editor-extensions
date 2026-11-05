@@ -9,6 +9,7 @@
       "patterns": [
         { "include": "#comments" },
         { "include": "#function-definition" },
+        { "include": "#type-declaration" },
         { "include": "#declaration" },
         { "include": "#strings" },
         { "include": "#numbers" },
@@ -82,6 +83,19 @@
       ]
     },
 
+    "type-declaration": {
+      "comment": "`type Name = ...` and `export type Name = ...`. A name and an `=` must follow, so `type(x)` stays a call. A line ending in an operator continues on the next line.",
+      "begin": "(?<![.:\\w])(?:(export)\\s+)?(type)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(=)(?!=)",
+      "beginCaptures": {
+        "1": { "name": "storage.modifier.neyuki" },
+        "2": { "name": "storage.type.neyuki" },
+        "3": { "name": "entity.name.type.alias.neyuki" },
+        "4": { "name": "keyword.operator.assignment.neyuki" }
+      },
+      "end": "(?<![|&(,{\\[=])\\s*$|(?<=[A-Za-z0-9_?})\\]])(?=\\s+[A-Za-z_])",
+      "patterns": [{ "include": "#comments" }, { "include": "#types" }]
+    },
+
     "declaration": {
       "match": "\\b(local|const|global)\\s+((?:[A-Za-z_][A-Za-z0-9_]*\\s*,\\s*)*[A-Za-z_][A-Za-z0-9_]*)",
       "captures": {
@@ -100,6 +114,15 @@
 
     "types": {
       "patterns": [
+        {
+          "comment": "A type from a module, such as `k.Options`.",
+          "match": "([A-Za-z_][A-Za-z0-9_]*)\\s*(\\.)\\s*([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": { "name": "entity.name.namespace.neyuki" },
+            "2": { "name": "punctuation.accessor.neyuki" },
+            "3": { "name": "entity.name.type.neyuki" }
+          }
+        },
         { "name": "support.type.primitive.neyuki", "match": "\\b(?:any|nil|never|boolean|number|int|integer|float|string|table|function|buffer|thread)\\b" },
         { "name": "entity.name.type.neyuki", "match": "[A-Za-z_][A-Za-z0-9_]*" },
         { "name": "keyword.operator.type.neyuki", "match": "\\?|\\||->|\\.\\.\\." },

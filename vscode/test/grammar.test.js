@@ -143,3 +143,42 @@ test('control flow keywords', async () => {
   expectScope(tokens, 'continue', 'keyword.control.loop');
   expectScope(tokens, '!=', 'keyword.operator.comparison');
 });
+
+test('type declarations, exported or not', async () => {
+  const tokens = await tokenize('type Point = { x: number, y: number }\nexport type Handler = (string) -> nil\nlocal after = 1');
+  expectScope(tokens, 'type', 'storage.type', 0);
+  expectScope(tokens, 'Point', 'entity.name.type');
+  expectScope(tokens, 'number', 'support.type.primitive');
+  expectScope(tokens, 'export', 'storage.modifier');
+  expectScope(tokens, 'type', 'storage.type', 1);
+  expectScope(tokens, 'Handler', 'entity.name.type');
+  expectScope(tokens, '->', 'keyword.operator.type');
+  // The declaration ends with its line.
+  expectScope(tokens, 'local', 'storage.modifier');
+  expectNoScope(tokens, 'after', 'entity.name.type');
+});
+
+test('a type declaration continues after a trailing operator', async () => {
+  const tokens = await tokenize('type Shape =\n  string | number\nprint(x)');
+  expectScope(tokens, 'number', 'support.type.primitive');
+  expectScope(tokens, 'print', 'support.function.builtin');
+  expectNoScope(tokens, 'print', 'entity.name.type');
+});
+
+test('type(x) is still a call, not a declaration', async () => {
+  const tokens = await tokenize('local t = type(x)\nif type (y) == "table" then end');
+  expectScope(tokens, 'type', 'support.function.builtin', 0);
+  expectScope(tokens, 'type', 'support.function.builtin', 1);
+  expectNoScope(tokens, 'type', 'storage.type');
+});
+
+test('qualified type names in annotations', async () => {
+  const tokens = await tokenize('local opts: k.Options = {}\nfunction f(a: k.Options): k.Result end');
+  expectScope(tokens, 'k', 'entity.name.namespace', 0);
+  expectScope(tokens, 'Options', 'entity.name.type', 0);
+  expectScope(tokens, '.', 'punctuation.accessor', 0);
+  expectScope(tokens, 'k', 'entity.name.namespace', 1);
+  expectScope(tokens, 'Options', 'entity.name.type', 1);
+  expectScope(tokens, 'k', 'entity.name.namespace', 2);
+  expectScope(tokens, 'Result', 'entity.name.type');
+});
