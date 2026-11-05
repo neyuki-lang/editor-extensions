@@ -1,91 +1,245 @@
-// Activates the extension against the mock in vscode-mock.js and calls its
-// providers the way the editor would.
+// Activates the extension against the mocks in vscode-mock.js. Language
+// features live in the server, so what is tested here is the client around it:
+// starting, restarting, upgrades, the settings applied in the middleware, and
+// that a missing executable does not break activation.
 
-const { test } = require('node:test');
+const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
 const path = require('node:path');
-const { registered, settings, createDocument, Position } = require('./vscode-mock');
+const { vscode, registered, settings, messages, languageClient } = require('./vscode-mock');
 
+const exe = require('../src/executable');
+const { activateClient, deactivateClient } = require('../src/client');
 const extension = require('../src/extension');
-extension.activate({ subscriptions: [], asAbsolutePath: (p) => p });
 
-/** A document whose cursor is at `|` in `source`. */
-function at(source) {
-  const offset = source.indexOf('|');
-  const text = source.slice(0, offset) + source.slice(offset + 1);
-  const document = createDocument(text);
-  return { document, position: document.positionAt(offset) };
+const realInstalledVersion = exe.installedVersion;
+const realNow = Date.now;
+const missingBinary = path.join(__dirname, 'no-such-neyuki-binary');
+
+beforeEach(() => {
+  languageClient.instances.length = 0;
+  languageClient.failStart = false;
+  languageClient.serverInfo = { name: 'neyuki', version: '0.6.4' };
+  messages.warnings.length = 0;
+  messages.infos.length = 0;
+  for (const key of Object.keys(settings)) delete settings[key];
+  exe.installedVersion = realInstalledVersion;
+  Date.now = realNow;
+});
+
+/** Makes `neyuki --version` answer from `state.version` (undefined: it fails), counting calls. */
+function fakeVersion(state) {
+  state.calls = 0;
+  exe.installedVersion = async () => {
+    state.calls++;
+    return { missing: false, version: state.version };
+  };
 }
 
-const labelOf = (item) => (typeof item.label === 'string' ? item.label : item.label.label);
+const newContext = () => ({ subscriptions: [] });
+const last = () => languageClient.instances[languageClient.instances.length - 1];
+const statusItem = () => registered.statusItems[registered.statusItems.length - 1];
 
-function complete(source) {
-  const { document, position } = at(source);
-  return (registered.completion[0].provideCompletionItems(document, position) ?? []).map(labelOf);
-}
-
-test('completes library members through require bindings', () => {
-  const labels = complete('local files = require("@neyuki/fs")\nfiles.re|');
-  assert.ok(labels.includes('read') && labels.includes('remove'), labels.join(','));
-  assert.ok(!labels.includes('print'));
+test('parseVersion reads the output of neyuki --version', () => {
+  assert.equal(exe.parseVersion('neyuki 0.6.4\n'), '0.6.4');
+  assert.equal(exe.parseVersion('neyuki 0.6.4\r\n'), '0.6.4');
+  assert.equal(exe.parseVersion('Neyuki v0.7.0-dev (abc123)\n'), '0.7.0-dev');
+  assert.equal(exe.parseVersion('  neyuki   1.0.0'), '1.0.0');
+  assert.equal(exe.parseVersion('v22.1.0'), undefined);
+  assert.equal(exe.parseVersion('neyuki'), undefined);
+  assert.equal(exe.parseVersion(''), undefined);
+  assert.equal(exe.parseVersion(undefined), undefined);
 });
 
-test('completes nested namespaces and object methods', () => {
-  assert.ok(complete('local hid = require("@neyuki/hid")\nhid.|').includes('keyboard'));
-  assert.ok(complete('local ui = require("@neyuki/ui")\nlocal w = ui.open()\nw:|').includes('fillRect'));
-  assert.ok(complete('local s = "x"\ns:|').includes('split'));
+test('activation registers every command and survives a missing executable', async () => {
+  settings.path = missingBinary;
+  assert.doesNotThrow(() => extension.activate(newContext()));
+  for (const command of ['neyuki.restartServer', 'neyuki.stopServer', 'neyuki.showServerOutput', 'neyuki.runFile', 'neyuki.debugFile']) {
+    assert.equal(typeof registered.commands[command], 'function', command);
+  }
+  // Runs after the start that activation began, so the outcome is settled.
+  await registered.commands['neyuki.restartServer']();
+  assert.equal(languageClient.instances.length, 0, 'no client for a missing executable');
+  assert.ok(messages.warnings.some((m) => m.includes('Could not run')), messages.warnings.join('|'));
 });
 
-test('completes modules inside require and nothing inside strings', () => {
-  assert.ok(complete('local x = require("@neyuki/|').includes('@neyuki/http'));
-  assert.deepEqual(complete('print("math.|")'), []);
+test('a client that fails to start does not reject or crash activation', async () => {
+  fakeVersion({ version: '0.6.4' });
+  languageClient.failStart = true;
+  await assert.doesNotReject(activateClient(newContext()));
+  assert.equal(languageClient.instances.length, 1);
 });
 
-test('completes locals declared before the cursor, globals and keywords', () => {
-  const labels = complete('local total = 1\nlocal function helper() end\n|\nlocal later = 2');
-  for (const name of ['total', 'helper', 'print', 'math', 'while']) assert.ok(labels.includes(name), name);
-  assert.ok(!labels.includes('later'));
+test('the client runs `neyuki lsp` for file and untitled neyuki documents', async () => {
+  settings.path = 'C:/tools/neyuki.exe';
+  fakeVersion({ version: '0.6.4' });
+  await activateClient(newContext());
+  const { serverOptions, clientOptions } = last();
+  assert.equal(serverOptions.command, 'C:/tools/neyuki.exe');
+  assert.deepEqual(serverOptions.args, ['lsp']);
+  assert.deepEqual(clientOptions.documentSelector, [
+    { language: 'neyuki', scheme: 'file' },
+    { language: 'neyuki', scheme: 'untitled' },
+  ]);
 });
 
-test('hover shows the signature and documentation', () => {
-  const { document, position } = at('local x = math.cl|amp(5, 0, 1)');
-  const hover = registered.hover[0].provideHover(document, position);
-  assert.match(hover.contents.value, /math\.clamp\(n: number, min: number, max: number\): number/);
-  const local = at('local count: number = 1\nprint(cou|nt)');
-  assert.match(registered.hover[0].provideHover(local.document, local.position).contents.value, /local count: number/);
+test('the status bar shows the server version and opens the output', async () => {
+  fakeVersion({ version: '0.6.4' });
+  await activateClient(newContext());
+  assert.equal(statusItem().text, 'Neyuki 0.6.4');
+  assert.equal(statusItem().command, 'neyuki.showServerOutput');
+  registered.commands['neyuki.showServerOutput']();
+  assert.equal(last().outputShown, 1);
 });
 
-test('signature help tracks the active parameter', () => {
-  const { document, position } = at('local s = "a,b"\nprint(s:sub(1, |');
-  const help = registered.signature[0].provideSignatureHelp(document, position);
-  assert.equal(help.signatures[0].label, 'sub(i: number, j: number?): string');
-  assert.equal(help.activeParameter, 1);
+test('the status bar is only shown for neyuki files', async () => {
+  fakeVersion({ version: '0.6.4' });
+  vscode.window.activeTextEditor = { document: { languageId: 'neyuki' } };
+  await activateClient(newContext());
+  assert.equal(statusItem().visible, true);
+  vscode.window.activeTextEditor = { document: { languageId: 'lua' } };
+  registered.activeEditorChange[registered.activeEditorChange.length - 1]();
+  assert.equal(statusItem().visible, false);
+  vscode.window.activeTextEditor = undefined;
 });
 
-test('go to definition finds the declaration in effect', () => {
-  const { document, position } = at('local value = 1\nlocal function f(value)\n  return val|ue\nend');
-  const location = registered.definition[0].provideDefinition(document, position);
-  assert.equal(location.range.start.line, 1);
+test('a server without serverInfo gets a single upgrade warning', async () => {
+  fakeVersion({ version: '0.5.0' });
+  languageClient.serverInfo = undefined;
+  await activateClient(newContext());
+  await registered.commands['neyuki.restartServer']();
+  assert.equal(languageClient.instances.length, 2);
+  const upgrade = messages.warnings.filter((m) => /upgrade/i.test(m));
+  assert.equal(upgrade.length, 1, messages.warnings.join('|'));
 });
 
-test('the outline groups methods under their table', () => {
-  const document = createDocument('local Account = {}\nfunction Account.new()\n  return {}\nend\nfunction Account:close()\nend\nlocal function helper()\nend');
-  const symbols = registered.symbols[0].provideDocumentSymbols(document);
-  assert.deepEqual(symbols.map((s) => s.name), ['Account', 'helper']);
-  assert.deepEqual(symbols[0].children.map((s) => s.name), ['new', 'close']);
-  assert.equal(symbols[1].range.end.line, 7);
+test('neyuki.lint.enable false hides the diagnostics of the server', async () => {
+  fakeVersion({ version: '0.6.4' });
+  await activateClient(newContext());
+  const { handleDiagnostics } = last().clientOptions.middleware;
+  const uri = vscode.Uri.file('C:/a.nyk');
+  const diagnostics = [{ message: 'unused' }];
+  let received;
+  const next = (_uri, list) => (received = list);
+
+  handleDiagnostics(uri, diagnostics, next);
+  assert.deepEqual(received, diagnostics);
+
+  settings['lint.enable'] = false;
+  handleDiagnostics(uri, diagnostics, next);
+  assert.deepEqual(received, []);
 });
 
-const binary = ['release', 'debug']
-  .map((profile) => path.join(__dirname, '..', '..', '..', 'neyuki', 'target', profile, process.platform === 'win32' ? 'neyuki.exe' : 'neyuki'))
-  .find((p) => fs.existsSync(p));
+test('neyuki.completion.insertParentheses controls snippets and parameter hints', async () => {
+  fakeVersion({ version: '0.6.4' });
+  await activateClient(newContext());
+  const { provideCompletionItem } = last().clientOptions.middleware;
+  const items = () => [
+    { label: 'floor', kind: vscode.CompletionItemKind.Function, insertText: new vscode.SnippetString('floor($0)') },
+    { label: { label: 'abs', detail: '(n)' }, kind: vscode.CompletionItemKind.Method, insertText: new vscode.SnippetString('abs()$0') },
+    { label: 'plain', insertText: 'plain' },
+    { label: 'noInsertText' },
+  ];
+  const call = (list) => provideCompletionItem({}, {}, {}, {}, async () => list);
 
-test('lint diagnostics come from the neyuki executable', { skip: !binary && 'no neyuki build next to the extension' }, async () => {
-  settings.path = binary;
-  const { runLint } = require('../src/lint');
-  const items = await runLint('local unused = 1\nprint(missing)\n', path.join(__dirname, 'fixture.nyk'));
-  const codes = items.map((i) => `${i.code}@${i.line}:${i.column}`);
-  assert.ok(codes.includes('W0001@1:7'), codes.join(' '));
-  assert.ok(codes.includes('E0001@2:7'), codes.join(' '));
+  const kept = await call(items());
+  assert.ok(kept[0].insertText instanceof vscode.SnippetString);
+  // Parameter hints open after completing a function, since its "(" is inserted, not typed.
+  assert.equal(kept[0].command.command, 'editor.action.triggerParameterHints');
+  assert.equal(kept[1].command.command, 'editor.action.triggerParameterHints');
+  assert.equal(kept[2].command, undefined);
+
+  settings['completion.insertParentheses'] = false;
+  const plain = await call(items());
+  assert.deepEqual(plain.map((i) => i.insertText), ['floor', 'abs', 'plain', undefined]);
+
+  const list = await call({ isIncomplete: true, items: items() });
+  assert.equal(list.items[0].insertText, 'floor');
+  assert.equal(list.isIncomplete, true);
+  assert.equal(await call(undefined), undefined);
+});
+
+test('restart replaces the client, and the old one is disposed', async () => {
+  fakeVersion({ version: '0.6.4' });
+  await activateClient(newContext());
+  await registered.commands['neyuki.restartServer']();
+  assert.equal(languageClient.instances.length, 2);
+  assert.equal(languageClient.instances[0].disposed, true);
+  assert.equal(languageClient.instances[1].disposed, false);
+});
+
+test('changing neyuki.path or neyuki.lint.enable restarts, other settings do not', async () => {
+  fakeVersion({ version: '0.6.4' });
+  await activateClient(newContext());
+  const onChange = registered.configChange[registered.configChange.length - 1];
+  await onChange({ affectsConfiguration: (key) => key === 'neyuki.completion.insertParentheses' });
+  assert.equal(languageClient.instances.length, 1);
+  await onChange({ affectsConfiguration: (key) => key === 'neyuki.path' });
+  assert.equal(languageClient.instances.length, 2);
+  await onChange({ affectsConfiguration: (key) => key === 'neyuki.lint.enable' });
+  assert.equal(languageClient.instances.length, 3);
+});
+
+test('a window focus restarts the client when the executable was upgraded, at most every 30 seconds', async () => {
+  const state = { version: '0.6.4' };
+  fakeVersion(state);
+  let now = 1_000_000;
+  Date.now = () => now;
+  await activateClient(newContext());
+  const focus = (focused = true) => registered.windowState[registered.windowState.length - 1]({ focused });
+  assert.equal(state.calls, 1); // the probe at start
+
+  await focus(false);
+  assert.equal(state.calls, 1, 'losing focus does not check');
+
+  await focus();
+  assert.equal(state.calls, 2);
+  assert.equal(languageClient.instances.length, 1, 'same version: no restart');
+
+  state.version = '0.6.5';
+  languageClient.serverInfo = { name: 'neyuki', version: '0.6.5' };
+  now += 10_000;
+  await focus();
+  assert.equal(state.calls, 2, 'throttled');
+  assert.equal(languageClient.instances.length, 1);
+
+  now += 30_000;
+  await focus();
+  assert.equal(languageClient.instances.length, 2, 'upgraded: restart');
+  assert.equal(statusItem().text, 'Neyuki 0.6.5');
+
+  // A failed check changes nothing.
+  state.version = undefined;
+  now += 31_000;
+  await focus();
+  assert.equal(languageClient.instances.length, 2);
+});
+
+test('a stopped server is not started again by a focus until it is restarted', async () => {
+  const state = { version: '0.6.4' };
+  fakeVersion(state);
+  let now = 1_000_000;
+  Date.now = () => now;
+  await activateClient(newContext());
+  await registered.commands['neyuki.stopServer']();
+  assert.equal(last().disposed, true);
+
+  state.version = '0.6.5';
+  now += 31_000;
+  await registered.windowState[registered.windowState.length - 1]({ focused: true });
+  assert.equal(languageClient.instances.length, 1);
+
+  await registered.commands['neyuki.restartServer']();
+  assert.equal(languageClient.instances.length, 2);
+  assert.equal(last().disposed, false);
+});
+
+test('deactivate stops the client and returns a promise', async () => {
+  fakeVersion({ version: '0.6.4' });
+  await activateClient(newContext());
+  const result = extension.deactivate();
+  assert.ok(result && typeof result.then === 'function');
+  await result;
+  assert.equal(last().disposed, true);
+  await deactivateClient();
 });
